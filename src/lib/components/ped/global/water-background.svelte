@@ -7,6 +7,7 @@
 
 <div class={cn("background w-full h-screen relative flex", className)}>
     {@render children?.()}
+    <!-- <div class="mt-auto p-2 absolute bottom-0">made by boon4681</div> -->
 </div>
 
 <style>

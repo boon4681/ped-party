@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hexagon Grid Fill</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #1a1a1a;
+            color: white;
+        }
+        
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            background: #2a2a2a;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        label {
+            font-size: 12px;
+            color: #ccc;
+        }
+        
+        input[type="range"] {
+            width: 120px;
+        }
+        
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        button:hover {
+            background: #45a049;
+        }
+        
+        svg {
+            border: 1px solid #444;
+            background: #000;
+        }
+        
+        .polygon {
+            fill: none;
+            stroke: #ff6b6b;
+            stroke-width: 2;
+        }
+        
+        .hexagon {
+            fill: #4ecdc4;
+            stroke: #2c5aa0;
+            stroke-width: 0.5;
+            opacity: 0.7;
+        }
+        
+        .hexagon:hover {
+            fill: #45b7aa;
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Hexagon Grid Fill for Polygon</h1>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label>Hexagon Size</label>
+                <input type="range" id="sizeSlider" min="5" max="50" value="20">
+                <span id="sizeValue">20</span>
+            </div>
+            
+            <div class="control-group">
+                <label>Grid Density</label>
+                <input type="range" id="densitySlider" min="0.5" max="2" step="0.1" value="1">
+                <span id="densityValue">1.0</span>
+            </div>
+            
+            <button onclick="generateRandomPolygon()">Random Polygon</button>
+            <button onclick="drawHexGrid()">Regenerate Grid</button>
+        </div>
+        
+        <svg id="svg" width="800" height="600"></svg>
+        
+        <div style="color: #ccc; font-size: 14px; text-align: center; max-width: 600px;">
+            <p>Click and drag to modify the polygon points. The hexagon grid automatically fills the area.</p>
+            <p>Use the controls above to adjust the hexagon size and grid density.</p>
+        </div>
+    </div>
+
+    <script>
+        const svg = d3.select("#svg");
+        const width = 800;
+        const height = 600;
+        
+        // Example polygon points - you can replace this with your own
+        let polygonPoints = [
+            [200, 150],
+            [600, 100],
+            [700, 300],
+            [550, 500],
+            [300, 450],
+            [150, 300]
+        ];
+        
+        let hexSize = 20;
+        let gridDensity = 1;
+        
+        // Create clip path for the polygon
+        const defs = svg.append("defs");
+        
+        function updateControls() {
+            const sizeSlider = document.getElementById("sizeSlider");
+            const densitySlider = document.getElementById("densitySlider");
+            const sizeValue = document.getElementById("sizeValue");
+            const densityValue = document.getElementById("densityValue");
+            
+            sizeSlider.addEventListener("input", function() {
+                hexSize = +this.value;
+                sizeValue.textContent = hexSize;
+                drawHexGrid();
+            });
+            
+            densitySlider.addEventListener("input", function() {
+                gridDensity = +this.value;
+                densityValue.textContent = gridDensity.toFixed(1);
+                drawHexGrid();
+            });
+        }
+        
+        function generateHexagonPath(centerX, centerY, size) {
+            const points = [];
+            for (let i = 0; i < 6; i++) {
+                const angle = (Math.PI / 3) * i + 90 / 180;
+                const x = centerX + size * Math.cos(angle);
+                const y = centerY + size * Math.sin(angle);
+                points.push([x, y]);
+            }
+            return "M" + points.map(p => p.join(",")).join("L") + "Z";
+        }
+        
+        function pointInPolygon(point, polygon) {
+            const x = point[0], y = point[1];
+            let inside = false;
+            
+            for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+                const xi = polygon[i][0], yi = polygon[i][1];
+                const xj = polygon[j][0], yj = polygon[j][1];
+                
+                if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) {
+                    inside = !inside;
+                }
+            }
+            
+            return inside;
+        }
+        
+        function getBoundingBox(points) {
+            const xs = points.map(p => p[0]);
+            const ys = points.map(p => p[1]);
+            return {
+                minX: Math.min(...xs),
+                maxX: Math.max(...xs),
+                minY: Math.min(...ys),
+                maxY: Math.max(...ys)
+            };
+        }
+        
+        function generateHexGrid() {
+            const bbox = getBoundingBox(polygonPoints);
+            const hexagons = [];
+            
+            // Hexagon grid spacing
+            const hexWidth = hexSize * 2;
+            const hexHeight = hexSize * Math.sqrt(3);
+            const rowSpacing = hexHeight * 0.75 * gridDensity;
+            const colSpacing = hexWidth * 0.75 * gridDensity;
+            
+            // Generate hexagon centers in a grid pattern
+            for (let row = 0; row * rowSpacing < bbox.maxY - bbox.minY + hexHeight * 2; row++) {
+                const y = bbox.minY - hexHeight + row * rowSpacing;
+                
+                // Offset every other row for hexagon pattern
+                const xOffset = (row % 2) * (colSpacing / 2);
+                
+                for (let col = 0; col * colSpacing < bbox.maxX - bbox.minX + hexWidth * 2; col++) {
+                    const x = bbox.minX - hexWidth + col * colSpacing + xOffset;
+                    
+                    // Check if hexagon center or any vertex is inside the polygon
+                    const hexCenter = [x, y];
+                    let isInside = pointInPolygon(hexCenter, polygonPoints);
+                    
+                    // Also check hexagon vertices to catch edge cases
+                    if (!isInside) {
+                        for (let i = 0; i < 6; i++) {
+                            const angle = (Math.PI / 3) * i;
+                            const vx = x + hexSize * Math.cos(angle);
+                            const vy = y + hexSize * Math.sin(angle);
+                            if (pointInPolygon([vx, vy], polygonPoints)) {
+                                isInside = true;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (isInside) {
+                        hexagons.push({
+                            x: x,
+                            y: y,
+                            path: generateHexagonPath(x, y, hexSize)
+                        });
+                    }
+                }
+            }
+            
+            return hexagons;
+        }
+        
+        function drawHexGrid() {
+            // Clear previous hexagons
+            svg.selectAll(".hexagon").remove();
+            
+            const hexagons = generateHexGrid();
+            
+            // Draw hexagons
+            svg.selectAll(".hexagon")
+                .data(hexagons)
+                .enter()
+                .append("path")
+                .attr("class", "hexagon")
+                .attr("d", d => d.path)
+                .style("animation", (d, i) => `fadeIn 0.5s ease-in-out ${i * 0.01}s both`);
+        }
+        
+        function drawPolygon() {
+            // Clear previous polygon
+            svg.selectAll(".polygon").remove();
+            svg.selectAll(".vertex").remove();
+            
+            // Draw polygon
+            const line = d3.line();
+            const polygonPath = line(polygonPoints) + "Z";
+            
+            svg.append("path")
+                .datum(polygonPoints)
+                .attr("class", "polygon")
+                .attr("d", polygonPath);
+            
+            // Draw draggable vertices
+            const drag = d3.drag()
+                .on("drag", function(event, d) {
+                    d[0] = event.x;
+                    d[1] = event.y;
+                    d3.select(this)
+                        .attr("cx", d[0])
+                        .attr("cy", d[1]);
+                    drawPolygon();
+                    drawHexGrid();
+                });
+            
+            svg.selectAll(".vertex")
+                .data(polygonPoints)
+                .enter()
+                .append("circle")
+                .attr("class", "vertex")
+                .attr("cx", d => d[0])
+                .attr("cy", d => d[1])
+                .attr("r", 6)
+                .style("fill", "#ff6b6b")
+                .style("stroke", "#fff")
+                .style("stroke-width", 2)
+                .style("cursor", "move")
+                .call(drag);
+        }
+        
+        function generateRandomPolygon() {
+            const centerX = width / 2;
+            const centerY = height / 2;
+            const numPoints = 5 + Math.floor(Math.random() * 4); // 5-8 points
+            
+            polygonPoints = [];
+            
+            for (let i = 0; i < numPoints; i++) {
+                const angle = (2 * Math.PI * i) / numPoints + (Math.random() - 0.5) * 0.5;
+                const radius = 100 + Math.random() * 150;
+                const x = centerX + radius * Math.cos(angle);
+                const y = centerY + radius * Math.sin(angle);
+                polygonPoints.push([x, y]);
+            }
+            
+            drawPolygon();
+            drawHexGrid();
+        }
+        
+        // Add CSS animation
+        const style = document.createElement('style');
+        document.head.appendChild(style);
+        
+        // Initialize
+        updateControls();
+        drawPolygon();
+        drawHexGrid();
+    </script>
+</body>
+</html>

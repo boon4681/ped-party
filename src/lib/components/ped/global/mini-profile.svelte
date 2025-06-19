@@ -8,7 +8,7 @@
     const rotate = useMotionValue(0);
     let animation: AnimationPlaybackControls;
 
-    let props: { name: string; avatar: KobProps | PedProps } = $props();
+    let props: { name: string; admin: boolean } & (KobProps | PedProps) = $props();
     const click = () => {
         if (animation && animation.stop) {
             animation.stop();
@@ -25,18 +25,29 @@
     };
 </script>
 
-<ContextMenu.Root>
-    <ContextMenu.Trigger>
-        <Motion style={{ rotate }} let:motion>
-            <button onclick={click} use:motion class="group w-fit origin-center">
-                <div class="flex flex-col gap-2 text-white cursor-pointer">
-                    <Avatar class="size-20 border-3 rounded-lg border-black" {...props.avatar}></Avatar>
-                    <div class="font-semibold text-lg">{props.name}</div>
-                </div>
-            </button>
-        </Motion>
-    </ContextMenu.Trigger>
-    <ContextMenu.Content>
-        <ContextMenu.Item>Kick</ContextMenu.Item>
-    </ContextMenu.Content>
-</ContextMenu.Root>
+{#if props.admin}
+    <ContextMenu.Root>
+        <ContextMenu.Trigger>
+            <Motion style={{ rotate }} let:motion>
+                <button onclick={click} use:motion class="group w-fit origin-center">
+                    <div class="flex flex-col gap-2 text-white cursor-pointer">
+                        <Avatar class="size-20 border-[3px] rounded-lg border-black" {...props}></Avatar>
+                        <div class="font-semibold text-lg">{props.name}</div>
+                    </div>
+                </button>
+            </Motion>
+        </ContextMenu.Trigger>
+        <ContextMenu.Content>
+            <ContextMenu.Item>Kick</ContextMenu.Item>
+        </ContextMenu.Content>
+    </ContextMenu.Root>
+{:else}
+    <Motion style={{ rotate }} let:motion>
+        <button onclick={click} use:motion class="group w-fit origin-center">
+            <div class="flex flex-col gap-2 text-white cursor-pointer">
+                <Avatar class="size-20 border-[3px] rounded-lg border-black" {...props}></Avatar>
+                <div class="font-semibold text-lg">{props.name}</div>
+            </div>
+        </button>
+    </Motion>
+{/if}
